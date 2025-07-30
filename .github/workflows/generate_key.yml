@@ -1,0 +1,53 @@
+name: Generate Android Keystore
+
+on:
+  workflow_dispatch:
+    inputs:
+      user_id:
+        description: 'User ID for key association'
+        required: true
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Generate Android Keystore
+        run: |
+          keytool -genkeypair \
+            -alias ${{ secrets.KEY_ALIAS }} \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=${{ secrets.KEY_CN }}, OU=${{ secrets.KEY_OU }}, O=${{ secrets.KEY_O }}, L=${{ secrets.KEY_L }}, S=${{ secrets.KEY_S }}, C=${{ secrets.KEY_C }}" \
+            -keystore appkey.jks \
+            -storepass ${{ secrets.KEYSTORE_PASS }} \
+            -keypass ${{ secrets.KEY_PASS }}
+
+      - name: Get SHA-256 fingerprint
+        id: get_fingerprint
+        run: |
+          fingerprint=$(keytool -list -v -keystore appkey.jks -alias ${{ secrets.KEY_ALIAS }} -storepass ${{ secrets.KEYSTORE_PASS }} | grep "SHA256:" | awk '{print $2}')
+          echo "SHA256=$fingerprint" >> $GITHUB_ENV
+          echo "SHA-256 fingerprint: $fingerprint"
+
+      - name: Base64 encode keystore
+        id: encode_key
+        run: |
+          base64 -w 0 appkey.jks > encoded_key.b64
+          echo "::add-mask::$(cat encoded_key.b64)"
+
+      - name: Send POST request to server
+        run: |
+          curl -X POST "${{ secrets.UPLOAD_ENDPOINT }}" \
+            -H "Authorization: Bearer ${{ secrets.UPLOAD_TOKEN }}" \
+            -F "keystore_base64=$(cat encoded_key.b64)" \
+            -F "sha256=$SHA256" \
+            -F "token=${{ secrets.SECRET_TOKEN }}" \
+            -F "user_id=${{ github.event.inputs.user_id }}"
