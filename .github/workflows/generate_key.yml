@@ -49,5 +49,4 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.UPLOAD_TOKEN }}" \
             -F "keystore_base64=$(cat encoded_key.b64)" \
             -F "sha256=$SHA256" \
-            -F "token=${{ secrets.SECRET_TOKEN }}" \
             -F "user_id=${{ github.event.inputs.user_id }}"
